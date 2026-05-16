@@ -1,7 +1,7 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
 #  TunnelBridge Installer
-#  https://github.com/SwanFlutter/TunnelBridge
+#  https://github.com/sadrr7/TunnelBridge
 # ═══════════════════════════════════════════════════════════════
 set -eo pipefail
 
@@ -18,7 +18,7 @@ step() { echo -e "\n${BOLD}${BLUE}[$2/$TOTAL] $1${NC}"; }
 TOTAL=10
 INSTALL_DIR="/opt/tunnelbridge"
 SERVICE_NAME="tunnelbridge"
-REPO="https://github.com/SwanFlutter/TunnelBridge"
+REPO="https://github.com/sadrr7/TunnelBridge"
 PYTHON_MIN="3.10"
 
 # ── بنر ───────────────────────────────────────────────────────

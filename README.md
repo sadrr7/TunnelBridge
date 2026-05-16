@@ -8,19 +8,19 @@
 
 ### سرور خارج (اول نصب کنید)
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SwanFlutter/TunnelBridge/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/sadrr7/TunnelBridge/main/install.sh)
 # انتخاب: 2 (خارج)
 ```
 
 ### سرور ایران (بعد نصب کنید)
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/SwanFlutter/TunnelBridge/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/sadrr7/TunnelBridge/main/install.sh)
 # انتخاب: 1 (ایران) → IP سرور خارج را وارد کنید
 ```
 
 ### اگر GitHub محدود است:
 ```bash
-bash <(curl -fsSL https://fastly.jsdelivr.net/gh/SwanFlutter/TunnelBridge@main/install.sh)
+bash <(curl -fsSL https://fastly.jsdelivr.net/gh/sadrr7/TunnelBridge@main/install.sh)
 ```
 
 ---
