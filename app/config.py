@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8080
     SECRET_KEY: str = "change-me-in-production-use-random-32-chars"
-    DATABASE_URL: str = "sqlite+aiosqlite:///./tunnelbridge.db"
+    DATABASE_URL: str = "sqlite+aiosqlite:////opt/tunnelbridge/tunnelbridge.db"
     LOG_LEVEL: str = "INFO"
 
     # Xray binary path

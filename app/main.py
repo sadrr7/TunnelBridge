@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# مسیر مطلق پروژه — مستقل از working directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 async def _sync_tunnel_statuses():
@@ -87,7 +91,7 @@ app.add_middleware(
 app.include_router(tunnels.router)
 app.include_router(system.router)
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 @app.get("/", response_class=HTMLResponse)
