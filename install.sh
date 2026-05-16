@@ -15,7 +15,7 @@ warn() { echo -e "${YELLOW}  ⚠ $1${NC}"; }
 err()  { echo -e "${RED}  ✗ $1${NC}"; exit 1; }
 step() { echo -e "\n${BOLD}${BLUE}[$2/$TOTAL] $1${NC}"; }
 
-TOTAL=9
+TOTAL=10
 INSTALL_DIR="/opt/tunnelbridge"
 SERVICE_NAME="tunnelbridge"
 REPO="https://github.com/SwanFlutter/TunnelBridge"
@@ -80,6 +80,32 @@ read -p "  آیا نصب شروع شود؟ (y/n): " CONFIRM
 [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && echo "لغو شد." && exit 0
 
 # ══════════════════════════════════════════════════════════════
+# پاک‌سازی نصب قبلی (اگر وجود داشته باشد)
+# ══════════════════════════════════════════════════════════════
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    warn "سرویس قبلی در حال اجراست — متوقف می‌شود..."
+    systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+fi
+if systemctl is-enabled --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+fi
+if [[ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]]; then
+    rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+    systemctl daemon-reload 2>/dev/null || true
+    ok "سرویس systemd قبلی حذف شد"
+fi
+if [[ -d "$INSTALL_DIR" ]]; then
+    warn "نصب قبلی پیدا شد در $INSTALL_DIR"
+    # بکاپ .env اگر وجود داشت
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        cp "$INSTALL_DIR/.env" "/tmp/tunnelbridge_env_backup"
+        info ".env بکاپ گرفته شد → /tmp/tunnelbridge_env_backup"
+    fi
+    rm -rf "$INSTALL_DIR"
+    ok "نصب قبلی پاک شد"
+fi
+
+# ══════════════════════════════════════════════════════════════
 # STEP 1 — بسته‌های سیستمی
 # ══════════════════════════════════════════════════════════════
 step "نصب بسته‌های سیستمی" 1
@@ -106,15 +132,8 @@ python3 -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)" \
 # ══════════════════════════════════════════════════════════════
 step "دانلود TunnelBridge از GitHub" 2
 
-if [[ -d "$INSTALL_DIR" ]]; then
-    warn "مسیر $INSTALL_DIR وجود دارد — بروزرسانی..."
-    cd "$INSTALL_DIR"
-    git pull origin main 2>&1 | sed 's/^/    /' || warn "git pull ناموفق بود — از کد موجود استفاده می‌شود"
-else
-    info "کلون کردن ریپو..."
-    git clone "$REPO" "$INSTALL_DIR" 2>&1 | sed 's/^/    /'
-fi
-
+info "کلون کردن ریپو..."
+git clone "$REPO" "$INSTALL_DIR" 2>&1 | sed 's/^/    /'
 ok "کد دانلود شد → $INSTALL_DIR"
 
 # ══════════════════════════════════════════════════════════════
@@ -263,9 +282,52 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════
-# STEP 9 — سرویس systemd
+# STEP 9 — بررسی سلامت کد Python
 # ══════════════════════════════════════════════════════════════
-step "ایجاد سرویس systemd" 9
+step "بررسی سلامت کد Python" 9
+
+cd "$INSTALL_DIR"
+source venv/bin/activate
+
+info "بررسی syntax فایل‌های Python..."
+SYNTAX_OK=true
+for pyfile in app/main.py app/config.py app/models.py app/tunnel_engine.py app/api/tunnels.py app/api/system.py; do
+    if python3 -c "import ast; ast.parse(open('$pyfile').read())" 2>/dev/null; then
+        echo -e "    ${GREEN}✓${NC} $pyfile"
+    else
+        echo -e "    ${RED}✗ خطای syntax: $pyfile${NC}"
+        python3 -c "import ast; ast.parse(open('$pyfile').read())" 2>&1 | sed 's/^/      /'
+        SYNTAX_OK=false
+    fi
+done
+
+if [[ "$SYNTAX_OK" == "false" ]]; then
+    err "خطای syntax در کد Python — نصب متوقف شد. لطفاً کد را بررسی کنید."
+fi
+ok "همه فایل‌های Python سالم هستند"
+
+# ── تست import ────────────────────────────────────────────────
+info "تست import وابستگی‌ها..."
+python3 -c "
+import sys
+mods = ['fastapi','uvicorn','pydantic','sqlalchemy','aiosqlite','psutil','jinja2','aiofiles']
+failed = []
+for m in mods:
+    try:
+        __import__(m)
+    except ImportError:
+        failed.append(m)
+if failed:
+    print('MISSING: ' + ', '.join(failed))
+    sys.exit(1)
+print('OK')
+" || err "وابستگی‌های Python ناقص است — pip install -r requirements.txt را دوباره اجرا کنید"
+ok "همه وابستگی‌ها موجود هستند"
+
+# ══════════════════════════════════════════════════════════════
+# STEP 10 — سرویس systemd
+# ══════════════════════════════════════════════════════════════
+step "ایجاد سرویس systemd" 10
 
 cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
@@ -292,12 +354,30 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" > /dev/null 2>&1
 systemctl start "$SERVICE_NAME"
 
-sleep 2
+sleep 3
 if systemctl is-active --quiet "$SERVICE_NAME"; then
     ok "سرویس systemd فعال و در حال اجراست"
+    # ── health check داشبورد ──────────────────────────────────
+    info "بررسی پاسخ داشبورد..."
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:8080/api/system/health 2>/dev/null || echo "000")
+    if [[ "$HTTP_CODE" == "200" ]]; then
+        ok "داشبورد پاسخ داد (HTTP $HTTP_CODE) ✅"
+    else
+        warn "داشبورد هنوز آماده نیست (HTTP $HTTP_CODE) — چند ثانیه صبر کنید"
+        sleep 5
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:8080/api/system/health 2>/dev/null || echo "000")
+        if [[ "$HTTP_CODE" == "200" ]]; then
+            ok "داشبورد آماده شد (HTTP $HTTP_CODE) ✅"
+        else
+            warn "داشبورد پاسخ نداد — لاگ:"
+            journalctl -u "$SERVICE_NAME" -n 15 --no-pager | sed 's/^/    /'
+        fi
+    fi
 else
-    warn "سرویس شروع نشد — لاگ:"
-    journalctl -u "$SERVICE_NAME" -n 20 --no-pager | sed 's/^/    /'
+    echo -e "\n${RED}  ✗ سرویس شروع نشد — لاگ کامل:${NC}"
+    journalctl -u "$SERVICE_NAME" -n 30 --no-pager | sed 's/^/    /'
+    echo ""
+    err "نصب ناموفق بود. لاگ بالا را بررسی کنید."
 fi
 
 # ══════════════════════════════════════════════════════════════

@@ -225,7 +225,8 @@ async def get_process_output(tunnel_id: str, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/{tunnel_id}/test")
-async def test_tunnel_connection(tunnel_id: str, db: AsyncSession = Depends(get_db)):    """Check if the tunnel's target (remote server or destination) is reachable."""
+async def test_tunnel_connection(tunnel_id: str, db: AsyncSession = Depends(get_db)):
+    """Check if the tunnel's target (remote server or destination) is reachable."""
     t = await db.get(Tunnel, tunnel_id)
     if not t:
         raise HTTPException(404, "Tunnel not found")

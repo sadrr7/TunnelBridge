@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.config import settings
 from app.models import init_db, AsyncSessionLocal, Tunnel
@@ -50,13 +50,19 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database ready")
     # Reset any stale 'running' statuses from previous session
-    async with AsyncSessionLocal() as db:
-        await db.execute(
-            update(Tunnel).where(Tunnel.status == "running").values(
-                status="stopped", pid=None, error_msg="Service restarted"
-            )
-        )
-        await db.commit()
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Tunnel).where(Tunnel.status == "running"))
+            stale = result.scalars().all()
+            for t in stale:
+                t.status = "stopped"
+                t.pid = None
+                t.error_msg = "Service restarted"
+            if stale:
+                await db.commit()
+                logger.info(f"Reset {len(stale)} stale tunnel(s) to stopped")
+    except Exception as e:
+        logger.warning(f"Could not reset stale tunnels: {e}")
     # Start background status monitor
     task = asyncio.create_task(_sync_tunnel_statuses())
     yield
