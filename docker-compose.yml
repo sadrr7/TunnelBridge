@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  tunnelbridge:
+    build: .
+    container_name: tunnelbridge
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      # Expose common tunnel ports — add more as needed
+      - "10080-10090:10080-10090"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-please-use-random-string}
+      SERVER_ROLE: ${SERVER_ROLE:-iran}           # iran | foreign
+      FOREIGN_SERVER_IP: ${FOREIGN_SERVER_IP:-}   # IP of the foreign server
+      FOREIGN_SERVER_PORT: ${FOREIGN_SERVER_PORT:-443}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+      - tunnelbridge_db:/app
+    network_mode: host   # needed for raw tunnel port access
+    cap_add:
+      - NET_ADMIN        # needed for WireGuard / raw sockets
+
+volumes:
+  tunnelbridge_db:
